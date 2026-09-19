@@ -1,0 +1,756 @@
+-- ============================================================
+-- ZanjiUI.lua - ZanjiHub-style custom UI library
+-- Rayfield-compatible API so existing script.lua + remote
+-- modules (main/pets/automation/...) work with 1-line change:
+--
+--   BEFORE: Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+--   AFTER:  Rayfield = loadstring(game:HttpGet('YOUR_RAW/ZanjiUI.lua'))()
+--   -- or local file: Rayfield = loadfile("ZanjiUI.lua")()
+--
+-- Supports: CreateWindow, CreateTab, CreateSection, CreateDivider,
+-- CreateLabel, CreateParagraph, CreateButton, CreateToggle,
+-- CreateDropdown, CreateInput, CreateSlider, CreateKeybind,
+-- Notify, Destroy, + :Set / :Refresh / .CurrentOption / .CurrentValue
+-- Style matches screenshot: dark + purple stroke cards, left sidebar,
+-- top search bar, right-aligned toggles, footer discord.
+-- ============================================================
+local ZanjiUI = {}
+ZanjiUI.Flags = {}
+ZanjiUI.Version = "1.0-zanji"
+
+local Players = game:GetService("Players")
+local CoreGui = game:GetService("CoreGui")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local LocalPlayer = Players.LocalPlayer
+
+local function mk(class, props, parent)
+    local o = Instance.new(class)
+    for k, v in pairs(props or {}) do
+        if k ~= "Parent" then
+            pcall(function() o[k] = v end)
+        end
+    end
+    o.Parent = parent or props and props.Parent or nil
+    return o
+end
+
+local function applyCorner(obj, r)
+    local c = Instance.new("UICorner")
+    c.CornerRadius = UDim.new(0, r or 6)
+    c.Parent = obj
+end
+
+local function applyStroke(obj, color, trans, thick)
+    local s = Instance.new("UIStroke")
+    s.Color = color or Color3.fromRGB(124, 58, 237)
+    s.Transparency = trans ~= nil and trans or 0.5
+    s.Thickness = thick or 1
+    s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    s.Parent = obj
+    return s
+end
+
+local BG_MAIN   = Color3.fromRGB(13, 13, 19)
+local BG_SIDE   = Color3.fromRGB(17, 17, 26)
+local BG_CARD   = Color3.fromRGB(20, 20, 29)
+local BG_ELEM   = Color3.fromRGB(26, 26, 38)
+local BG_INPUT  = Color3.fromRGB(22, 22, 32)
+local STROKE_P  = Color3.fromRGB(124, 58, 237)
+local STROKE_D  = Color3.fromRGB(59, 59, 85)
+local TXT_MAIN  = Color3.fromRGB(235, 235, 245)
+local TXT_DIM   = Color3.fromRGB(150, 150, 170)
+local ACCENT    = Color3.fromRGB(139, 92, 246)
+local GREEN_ON  = Color3.fromRGB(124, 58, 237)
+
+function ZanjiUI:Notify(opts)
+    opts = opts or {}
+    local title = opts.Title or "ZanjiHub"
+    local content = opts.Content or ""
+    local duration = opts.Duration or 4
+    pcall(function()
+        local holder = CoreGui:FindFirstChild("__ZanjiNotif")
+        if not holder then
+            local g = Instance.new("ScreenGui")
+            g.Name = "__ZanjiNotif"
+            g.ResetOnSpawn = false
+            g.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+            local ok = pcall(function() g.Parent = CoreGui end)
+            if not ok then g.Parent = LocalPlayer:WaitForChild("PlayerGui") end
+            holder = g
+        end
+        local f = mk("Frame", {
+            Size = UDim2.new(0, 260, 0, 64),
+            Position = UDim2.new(1, -280, 1, -90),
+            BackgroundColor3 = BG_CARD,
+            BorderSizePixel = 0,
+        }, holder)
+        applyCorner(f, 6)
+        applyStroke(f, STROKE_P, 0.35, 1)
+        mk("TextLabel", {
+            Size = UDim2.new(1, -12, 0, 20),
+            Position = UDim2.new(0, 8, 0, 6),
+            BackgroundTransparency = 1,
+            Text = tostring(title),
+            Font = Enum.Font.GothamBold,
+            TextSize = 13,
+            TextColor3 = TXT_MAIN,
+            TextXAlignment = Enum.TextXAlignment.Left,
+        }, f)
+        local c = mk("TextLabel", {
+            Size = UDim2.new(1, -12, 0, 32),
+            Position = UDim2.new(0, 8, 0, 26),
+            BackgroundTransparency = 1,
+            Text = tostring(content),
+            Font = Enum.Font.Gotham,
+            TextSize = 12,
+            TextColor3 = TXT_DIM,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            TextYAlignment = Enum.TextYAlignment.Top,
+            TextWrapped = true,
+        }, f)
+        task.delay(duration, function() pcall(function() f:Destroy() end) end)
+    end)
+end
+
+function ZanjiUI:Destroy()
+    pcall(function()
+        local g = CoreGui:FindFirstChild("ZanjiUI")
+        if g then g:Destroy() end
+        local n = CoreGui:FindFirstChild("__ZanjiNotif")
+        if n then n:Destroy() end
+    end)
+    pcall(function()
+        local pg = LocalPlayer:FindFirstChildOfClass("PlayerGui")
+        if pg then
+            local g = pg:FindFirstChild("ZanjiUI")
+            if g then g:Destroy() end
+        end
+    end)
+end
+
+function ZanjiUI:CreateWindow(opts)
+    opts = opts or {}
+    local winTitle = opts.Name or opts.Title or "ZanjiHub"
+    local subTitle = opts.LoadingSubtitle or opts.SubTitle or ""
+    local toggleKey = Enum.KeyCode.H
+    pcall(function()
+        if typeof(opts.ToggleUIKeybind) == "EnumItem" then
+            toggleKey = opts.ToggleUIKeybind
+        elseif typeof(opts.MinimizeKey) == "EnumItem" then
+            toggleKey = opts.MinimizeKey
+        elseif type(opts.ToggleUIKeybind) == "string" and Enum.KeyCode[opts.ToggleUIKeybind] then
+            toggleKey = Enum.KeyCode[opts.ToggleUIKeybind]
+        end
+    end)
+
+    -- root gui
+    pcall(function()
+        local old = CoreGui:FindFirstChild("ZanjiUI")
+        if old then old:Destroy() end
+    end)
+    local gui = mk("ScreenGui", { Name = "ZanjiUI", ResetOnSpawn = false, ZIndexBehavior = Enum.ZIndexBehavior.Sibling })
+    local parented = pcall(function() gui.Parent = CoreGui end)
+    if not parented then
+        gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+    end
+    -- gethui protect for executors
+    pcall(function()
+        if gethui then gui.Parent = gethui() end
+    end)
+
+    local main = mk("Frame", {
+        Name = "Main",
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.new(0.5, 0, 0.5, 0),
+        Size = UDim2.fromOffset(760, 480),
+        BackgroundColor3 = BG_MAIN,
+        BorderSizePixel = 0,
+        Active = true,
+    }, gui)
+    applyCorner(main, 8)
+    applyStroke(main, Color3.fromRGB(42, 42, 58), 0.2, 1)
+
+    -- sidebar
+    local side = mk("Frame", {
+        Name = "Sidebar",
+        Size = UDim2.new(0, 150, 1, 0),
+        BackgroundColor3 = BG_SIDE,
+        BorderSizePixel = 0,
+    }, main)
+    applyCorner(side, 8)
+    local sideFix = mk("Frame", { Size = UDim2.new(0, 8, 1, 0), Position = UDim2.new(1, -8, 0, 0), BackgroundColor3 = BG_SIDE, BorderSizePixel = 0 }, side)
+
+    local logo = mk("TextLabel", {
+        Name = "Logo",
+        Size = UDim2.new(1, -12, 0, 30),
+        Position = UDim2.new(0, 6, 0, 6),
+        BackgroundTransparency = 1,
+        Text = "ZANJIHUB",
+        Font = Enum.Font.GothamBlack,
+        TextSize = 15,
+        TextColor3 = Color3.fromRGB(200, 170, 255),
+        TextXAlignment = Enum.TextXAlignment.Left,
+    }, side)
+    local grad = Instance.new("UIGradient")
+    grad.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(250, 120, 80)),
+        ColorSequenceKeypoint.new(0.4, Color3.fromRGB(220, 80, 200)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(139, 92, 246)),
+    })
+    grad.Parent = logo
+
+    local tabList = mk("Frame", {
+        Name = "TabList",
+        Size = UDim2.new(1, -8, 1, -52),
+        Position = UDim2.new(0, 4, 0, 42),
+        BackgroundTransparency = 1,
+    }, side)
+    local tabLayout = mk("UIListLayout", { Padding = UDim.new(0, 2), SortOrder = Enum.SortOrder.LayoutOrder }, tabList)
+
+    -- top bar
+    local top = mk("Frame", {
+        Name = "TopBar",
+        Size = UDim2.new(1, -150, 0, 56),
+        Position = UDim2.new(0, 150, 0, 0),
+        BackgroundTransparency = 1,
+    }, main)
+    local titleLbl = mk("TextLabel", {
+        Name = "Title",
+        Size = UDim2.new(0.55, 0, 0, 20),
+        Position = UDim2.new(0, 14, 0, 8),
+        BackgroundTransparency = 1,
+        Text = "Home",
+        Font = Enum.Font.GothamBold,
+        TextSize = 15,
+        TextColor3 = TXT_MAIN,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    }, top)
+    local descLbl = mk("TextLabel", {
+        Name = "Desc",
+        Size = UDim2.new(0.55, 0, 0, 26),
+        Position = UDim2.new(0, 14, 0, 26),
+        BackgroundTransparency = 1,
+        Text = subTitle ~= "" and subTitle or "Automation hub",
+        Font = Enum.Font.Gotham,
+        TextSize = 11,
+        TextColor3 = TXT_DIM,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextYAlignment = Enum.TextYAlignment.Top,
+        TextWrapped = true,
+    }, top)
+    local searchBox = mk("TextBox", {
+        Name = "Search",
+        Size = UDim2.new(0, 190, 0, 28),
+        Position = UDim2.new(1, -202, 0, 12),
+        BackgroundColor3 = BG_INPUT,
+        TextColor3 = TXT_MAIN,
+        PlaceholderText = "Search",
+        PlaceholderColor3 = TXT_DIM,
+        Font = Enum.Font.Gotham,
+        TextSize = 12,
+        Text = "",
+        ClearTextOnFocus = false,
+    }, top)
+    applyCorner(searchBox, 6)
+    applyStroke(searchBox, STROKE_D, 0.3, 1)
+    mk("UIPadding", { PaddingLeft = UDim.new(0, 28) }, searchBox)
+    mk("TextLabel", {
+        Size = UDim2.new(0, 24, 1, 0), Position = UDim2.new(0, 2, 0, 0),
+        BackgroundTransparency = 1, Text = "Q", Font = Enum.Font.GothamBold,
+        TextSize = 13, TextColor3 = TXT_DIM,
+    }, searchBox)
+
+    -- footer
+    mk("TextLabel", {
+        Size = UDim2.new(1, -160, 0, 16), Position = UDim2.new(0, 155, 1, -18),
+        BackgroundTransparency = 1, Text = "discord.gg/ywgY5taFYU",
+        Font = Enum.Font.Gotham, TextSize = 11, TextColor3 = TXT_DIM,
+        TextXAlignment = Enum.TextXAlignment.Center,
+    }, main)
+
+    -- drag
+    do
+        local dragging, dragStart, startPos = false, nil, nil
+        top.InputBegan:Connect(function(i)
+            if i.UserInputType == Enum.UserInputType.MouseButton1 then
+                dragging = true; dragStart = i.Position; startPos = main.Position
+            end
+        end)
+        UserInputService.InputChanged:Connect(function(i)
+            if dragging and i.UserInputType == Enum.UserInputType.MouseMovement then
+                local d = i.Position - dragStart
+                main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X, startPos.Y.Scale, startPos.Y.Offset + d.Y)
+            end
+        end)
+        UserInputService.InputEnded:Connect(function(i)
+            if i.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
+        end)
+    end
+    UserInputService.InputBegan:Connect(function(i, gpe)
+        if not gpe and i.KeyCode == toggleKey then
+            main.Visible = not main.Visible
+        end
+    end)
+
+    local Window = {}
+    Window._gui = gui
+    Window._main = main
+    Window._tabs = {}
+    Window._active = nil
+
+    local function setActive(tab)
+        Window._active = tab
+        for _, t in pairs(Window._tabs) do
+            t.Page.Visible = (t == tab)
+            t.Btn.BackgroundColor3 = (t == tab) and Color3.fromRGB(29, 29, 43) or BG_SIDE
+            t.Btn.BackgroundTransparency = (t == tab) and 0 or 1
+        end
+        titleLbl.Text = tab.Name
+        -- per-tab desc
+        if tab._desc and tab._desc ~= "" then
+            descLbl.Text = tab._desc
+        else
+            if tab.Name == "Eggs" then
+                descLbl.Text = "Egg collection, placement, hatching and pet placement automation."
+            else
+                descLbl.Text = winTitle
+            end
+        end
+    end
+
+    function Window:CreateTab(name, icon)
+        name = tostring(name or "Tab")
+        local btn = mk("TextButton", {
+            Size = UDim2.new(1, 0, 0, 32),
+            BackgroundColor3 = BG_SIDE,
+            BackgroundTransparency = 1,
+            Text = "",
+            AutoButtonColor = false,
+        }, tabList)
+        applyCorner(btn, 6)
+        mk("TextLabel", {
+            Size = UDim2.new(1, -10, 1, 0), Position = UDim2.new(0, 10, 0, 0),
+            BackgroundTransparency = 1, Text = "  " .. name,
+            Font = Enum.Font.GothamMedium, TextSize = 13, TextColor3 = TXT_MAIN,
+            TextXAlignment = Enum.TextXAlignment.Left,
+        }, btn)
+
+        local page = mk("ScrollingFrame", {
+            Name = name .. "_Page",
+            Size = UDim2.new(1, -170, 1, -80),
+            Position = UDim2.new(0, 160, 0, 60),
+            BackgroundTransparency = 1,
+            BorderSizePixel = 0,
+            ScrollBarThickness = 3,
+            ScrollBarImageColor3 = ACCENT,
+            CanvasSize = UDim2.new(0, 0, 0, 0),
+            AutomaticCanvasSize = Enum.AutomaticSize.Y,
+            Visible = false,
+        }, main)
+        mk("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10), PaddingTop = UDim.new(0, 4), PaddingBottom = UDim.new(0, 10) }, page)
+        local layout = mk("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }, page)
+
+        local Tab = { Name = name, Btn = btn, Page = page, _desc = "", _elements = {} }
+        table.insert(Window._tabs, Tab)
+        btn.MouseButton1Click:Connect(function() setActive(Tab) end)
+        if #Window._tabs == 1 then setActive(Tab) end
+
+        local function trackSearch(frame, text)
+            table.insert(Tab._elements, { Frame = frame, Text = string.lower(text or "") })
+        end
+
+        function Tab:CreateSection(title)
+            title = tostring(title or "Section")
+            local card = mk("Frame", { Size = UDim2.new(1, 0, 0, 34), BackgroundColor3 = BG_CARD, BorderSizePixel = 0, AutomaticSize = Enum.AutomaticSize.Y }, page)
+            applyCorner(card, 6)
+            applyStroke(card, STROKE_P, 0.55, 1)
+            local head = mk("TextButton", { Size = UDim2.new(1, 0, 0, 30), BackgroundTransparency = 1, Text = "" }, card)
+            mk("TextLabel", {
+                Size = UDim2.new(1, -40, 1, 0), Position = UDim2.new(0, 12, 0, 0),
+                BackgroundTransparency = 1, Text = "◉  " .. title,
+                Font = Enum.Font.GothamBold, TextSize = 13, TextColor3 = TXT_MAIN,
+                TextXAlignment = Enum.TextXAlignment.Left,
+            }, head)
+            local arrow = mk("TextLabel", {
+                Size = UDim2.new(0, 24, 1, 0), Position = UDim2.new(1, -28, 0, 0),
+                BackgroundTransparency = 1, Text = "▾", Font = Enum.Font.GothamBold,
+                TextSize = 14, TextColor3 = TXT_DIM,
+            }, head)
+            local body = mk("Frame", { Size = UDim2.new(1, 0, 0, 0), Position = UDim2.new(0, 0, 0, 30), BackgroundTransparency = 1, AutomaticSize = Enum.AutomaticSize.Y }, card)
+            mk("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10), PaddingTop = UDim.new(0, 2), PaddingBottom = UDim.new(0, 10) }, body)
+            mk("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }, body)
+            local open = true
+            head.MouseButton1Click:Connect(function()
+                open = not open
+                body.Visible = open
+                arrow.Text = open and "▾" or "▸"
+            end)
+            trackSearch(card, title)
+            -- return handle with full element API so Sections act like mini-tabs
+            local Sec = {}
+            local function addToBody(f) f.Parent = body; return f end
+            function Sec:CreateLabel(t) return Tab.CreateLabel(self, t, body) end
+            function Sec:CreateParagraph(o) return Tab.CreateParagraph(self, o, body) end
+            function Sec:CreateButton(o) return Tab.CreateButton(self, o, body) end
+            function Sec:CreateToggle(o) return Tab.CreateToggle(self, o, body) end
+            function Sec:CreateDropdown(o) return Tab.CreateDropdown(self, o, body) end
+            function Sec:CreateInput(o) return Tab.CreateInput(self, o, body) end
+            function Sec:CreateSlider(o) return Tab.CreateSlider(self, o, body) end
+            function Sec:CreateDivider() return Tab.CreateDivider(self, body) end
+            return Sec
+        end
+
+        function Tab:CreateDivider(forceParent)
+            local parent = typeof(forceParent) == "Instance" and forceParent or page
+            local d = mk("Frame", { Size = UDim2.new(1, 0, 0, 1), BackgroundColor3 = STROKE_D, BackgroundTransparency = 0.4, BorderSizePixel = 0 }, parent)
+            return d
+        end
+
+        function Tab:CreateLabel(text, forceParent)
+            local parent = typeof(forceParent) == "Instance" and forceParent or page
+            local l = mk("TextLabel", {
+                Size = UDim2.new(1, 0, 0, 20), BackgroundTransparency = 1,
+                Text = tostring(text or ""), Font = Enum.Font.GothamMedium,
+                TextSize = 12, TextColor3 = TXT_DIM, TextXAlignment = Enum.TextXAlignment.Left,
+                TextWrapped = true, AutomaticSize = Enum.AutomaticSize.Y,
+            }, parent)
+            trackSearch(l, tostring(text))
+            local h = {}
+            function h:Set(t) pcall(function() l.Text = tostring(t) end) end
+            return h
+        end
+
+        function Tab:CreateParagraph(tbl, forceParent)
+            tbl = tbl or {}
+            local parent = typeof(forceParent) == "Instance" and forceParent or page
+            local f = mk("Frame", { Size = UDim2.new(1, 0, 0, 48), BackgroundColor3 = BG_ELEM, BorderSizePixel = 0, AutomaticSize = Enum.AutomaticSize.Y }, parent)
+            applyCorner(f, 6)
+            applyStroke(f, STROKE_D, 0.5, 1)
+            mk("UIPadding", { PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8), PaddingTop = UDim.new(0, 6), PaddingBottom = UDim.new(0, 6) }, f)
+            local t = mk("TextLabel", { Size = UDim2.new(1, 0, 0, 16), BackgroundTransparency = 1, Text = tostring(tbl.Title or "Title"), Font = Enum.Font.GothamBold, TextSize = 12, TextColor3 = TXT_MAIN, TextXAlignment = Enum.TextXAlignment.Left }, f)
+            local c = mk("TextLabel", { Size = UDim2.new(1, 0, 0, 14), Position = UDim2.new(0, 0, 0, 18), BackgroundTransparency = 1, Text = tostring(tbl.Content or ""), Font = Enum.Font.Gotham, TextSize = 11, TextColor3 = TXT_DIM, TextXAlignment = Enum.TextXAlignment.Left, TextWrapped = true, AutomaticSize = Enum.AutomaticSize.Y }, f)
+            trackSearch(f, tostring(tbl.Title) .. " " .. tostring(tbl.Content))
+            local h = {}
+            function h:Set(nt)
+                nt = nt or {}
+                pcall(function()
+                    if nt.Title then t.Text = tostring(nt.Title) end
+                    if nt.Content then c.Text = tostring(nt.Content) end
+                end)
+            end
+            return h
+        end
+
+        function Tab:CreateButton(tbl, forceParent)
+            tbl = tbl or {}
+            local parent = typeof(forceParent) == "Instance" and forceParent or page
+            local b = mk("TextButton", {
+                Size = UDim2.new(1, 0, 0, 28), BackgroundColor3 = BG_ELEM,
+                Text = tostring(tbl.Name or tbl.Title or "Button"),
+                Font = Enum.Font.GothamMedium, TextSize = 12, TextColor3 = TXT_MAIN,
+                AutoButtonColor = true,
+            }, parent)
+            applyCorner(b, 6)
+            applyStroke(b, STROKE_D, 0.4, 1)
+            b.MouseButton1Click:Connect(function()
+                local cb = tbl.Callback or tbl.callback
+                if type(cb) == "function" then task.spawn(pcall, cb) end
+            end)
+            trackSearch(b, b.Text)
+            return b
+        end
+
+        function Tab:CreateToggle(tbl, forceParent)
+            tbl = tbl or {}
+            local parent = typeof(forceParent) == "Instance" and forceParent or page
+            local name = tostring(tbl.Name or tbl.Title or "Toggle")
+            local val = tbl.CurrentValue == true or tbl.Default == true
+            local cb = tbl.Callback or function() end
+            local flag = tbl.Flag or name
+            ZanjiUI.Flags[flag] = val
+            local row = mk("Frame", { Size = UDim2.new(1, 0, 0, 26), BackgroundTransparency = 1 }, parent)
+            mk("TextLabel", { Size = UDim2.new(1, -50, 1, 0), BackgroundTransparency = 1, Text = name, Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = TXT_MAIN, TextXAlignment = Enum.TextXAlignment.Left }, row)
+            local sw = mk("TextButton", { Size = UDim2.fromOffset(36, 20), Position = UDim2.new(1, -36, 0.5, -10), BackgroundColor3 = val and GREEN_ON or Color3.fromRGB(42, 42, 58), Text = "", AutoButtonColor = false }, row)
+            applyCorner(sw, 10)
+            local knob = mk("Frame", { Size = UDim2.fromOffset(14, 14), Position = val and UDim2.new(1, -17, 0.5, -7) or UDim2.new(0, 3, 0.5, -7), BackgroundColor3 = Color3.fromRGB(255, 255, 255), BorderSizePixel = 0 }, sw)
+            applyCorner(knob, 7)
+            trackSearch(row, name)
+            local h = { CurrentValue = val, Value = val }
+            local function render()
+                sw.BackgroundColor3 = h.CurrentValue and GREEN_ON or Color3.fromRGB(42, 42, 58)
+                knob.Position = h.CurrentValue and UDim2.new(1, -17, 0.5, -7) or UDim2.new(0, 3, 0.5, -7)
+            end
+            function h:Set(v)
+                h.CurrentValue = v and true or false
+                h.Value = h.CurrentValue
+                ZanjiUI.Flags[flag] = h.CurrentValue
+                render()
+                task.spawn(function() pcall(cb, h.CurrentValue) end)
+            end
+            sw.MouseButton1Click:Connect(function() h:Set(not h.CurrentValue) end)
+            function h:OnChanged(fn)
+                -- minimal: poll not needed, caller stores hook
+                h._hook = fn
+                local origSet = h.Set
+                function h:Set(v)
+                    h.CurrentValue = v and true or false
+                    h.Value = h.CurrentValue
+                    ZanjiUI.Flags[flag] = h.CurrentValue
+                    render()
+                    pcall(fn, h.CurrentValue)
+                    task.spawn(function() pcall(cb, h.CurrentValue) end)
+                end
+            end
+            return h
+        end
+
+        function Tab:CreateDropdown(tbl, forceParent)
+            tbl = tbl or {}
+            local parent = typeof(forceParent) == "Instance" and forceParent or page
+            local name = tostring(tbl.Name or tbl.Title or "Dropdown")
+            local options = tbl.Options or tbl.Values or {}
+            local multi = tbl.MultipleOptions == true or tbl.Multi == true
+            local flag = tbl.Flag or name
+            local cb = tbl.Callback or function() end
+            local cur = tbl.CurrentOption
+            if cur == nil then cur = tbl.Default end
+            local selected = {}
+            if multi then
+                if type(cur) == "table" then for _, v in ipairs(cur) do selected[tostring(v)] = true end end
+            else
+                if type(cur) == "table" then
+                    if #cur > 0 then selected = { tostring(cur[1]) } else selected = {} end
+                elseif cur ~= nil then
+                    selected = { tostring(cur) }
+                else
+                    selected = {}
+                end
+            end
+            mk("TextLabel", { Size = UDim2.new(1, 0, 0, 16), BackgroundTransparency = 1, Text = name, Font = Enum.Font.Gotham, TextSize = 11, TextColor3 = TXT_DIM, TextXAlignment = Enum.TextXAlignment.Left }, parent)
+            local box = mk("TextButton", { Size = UDim2.new(1, 0, 0, 28), BackgroundColor3 = BG_INPUT, Text = "", AutoButtonColor = false }, parent)
+            applyCorner(box, 6)
+            applyStroke(box, Color3.fromRGB(76, 76, 106), 0.4, 1)
+            local disp = mk("TextLabel", { Size = UDim2.new(1, -32, 1, 0), Position = UDim2.new(0, 10, 0, 0), BackgroundTransparency = 1, Text = "---", Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = TXT_MAIN, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd }, box)
+            mk("TextLabel", { Size = UDim2.new(0, 20, 1, 0), Position = UDim2.new(1, -22, 0, 0), BackgroundTransparency = 1, Text = "▾", Font = Enum.Font.GothamBold, TextSize = 13, TextColor3 = TXT_DIM }, box)
+            local list = mk("Frame", { Size = UDim2.new(1, 0, 0, 0), BackgroundColor3 = Color3.fromRGB(24, 24, 35), BorderSizePixel = 0, Visible = false, AutomaticSize = Enum.AutomaticSize.Y }, parent)
+            applyCorner(list, 6)
+            applyStroke(list, STROKE_D, 0.4, 1)
+            mk("UIPadding", { PaddingLeft = UDim.new(0, 4), PaddingRight = UDim.new(0, 4), PaddingTop = UDim.new(0, 4), PaddingBottom = UDim.new(0, 4) }, list)
+            local ll = mk("UIListLayout", { Padding = UDim.new(0, 2), SortOrder = Enum.SortOrder.LayoutOrder }, list)
+            trackSearch(box, name)
+            local h = { Options = options, Values = options, CurrentOption = {}, Value = nil, Multi = multi }
+            local function refreshText()
+                if multi then
+                    local arr = {}
+                    for k, v in pairs(selected) do if v == true then table.insert(arr, k) end end
+                    table.sort(arr)
+                    h.CurrentOption = arr
+                    h.Value = selected
+                    disp.Text = #arr > 0 and table.concat(arr, ", ") or "---"
+                    ZanjiUI.Flags[flag] = arr
+                else
+                    local v = selected[1]
+                    h.CurrentOption = v and { v } or {}
+                    h.Value = v
+                    disp.Text = v or "---"
+                    ZanjiUI.Flags[flag] = v
+                end
+                h.Options = h.Options
+                h.Values = h.Options
+            end
+            local function fire()
+                if multi then
+                    local arr = {}
+                    for k, v in pairs(selected) do if v then table.insert(arr, k) end end
+                    task.spawn(function() pcall(cb, arr) end)
+                else
+                    local v = selected[1]
+                    -- Rayfield single returns string; also support array-style like Fluent shim
+                    task.spawn(function() pcall(cb, v) end)
+                end
+            end
+            local function buildList()
+                for _, ch in ipairs(list:GetChildren()) do
+                    if ch:IsA("TextButton") then ch:Destroy() end
+                end
+                for _, opt in ipairs(h.Options or {}) do
+                    local os = tostring(opt)
+                    local isSel = multi and selected[os] or (selected[1] == os)
+                    local b = mk("TextButton", { Size = UDim2.new(1, 0, 0, 24), BackgroundColor3 = isSel and Color3.fromRGB(50, 35, 90) or BG_INPUT, Text = (isSel and "● " or "○ ") .. os, Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = TXT_MAIN, AutoButtonColor = false }, list)
+                    applyCorner(b, 4)
+                    b.MouseButton1Click:Connect(function()
+                        if multi then
+                            selected[os] = not selected[os]
+                        else
+                            selected = { os }
+                            list.Visible = false
+                        end
+                        refreshText(); buildList(); fire()
+                    end)
+                end
+            end
+            box.MouseButton1Click:Connect(function()
+                list.Visible = not list.Visible
+                if list.Visible then buildList() end
+            end)
+            refreshText(); buildList()
+            function h:Set(v)
+                if multi then
+                    if type(v) == "table" then
+                        local isArray = (#v > 0) or (next(v) == nil)
+                        if isArray then
+                            selected = {}
+                            for _, o in ipairs(v) do selected[tostring(o)] = true end
+                        else
+                            selected = {}
+                            for k, on in pairs(v) do if on then selected[tostring(k)] = true end end
+                        end
+                    elseif v == nil then
+                        selected = {}
+                    end
+                else
+                    if type(v) == "table" then
+                        if #v > 0 then selected = { tostring(v[1]) } else selected = {} end
+                    elseif v == nil then
+                        selected = {}
+                    else
+                        selected = { tostring(v) }
+                    end
+                end
+                refreshText(); buildList()
+                -- don't fire on programmatic Set to match Rayfield (only user clicks fire),
+                -- but update display. Call fire so backend stays in sync like Fluent shim:
+                -- fire()
+            end
+            function h:Refresh(newOpts)
+                if newOpts then h.Options = newOpts; h.Values = newOpts end
+                buildList(); refreshText()
+            end
+            function h:OnChanged(fn)
+                h._hook = fn
+            end
+            return h
+        end
+
+        function Tab:CreateInput(tbl, forceParent)
+            tbl = tbl or {}
+            local parent = typeof(forceParent) == "Instance" and forceParent or page
+            local name = tostring(tbl.Name or tbl.Title or "Input")
+            local cur = tostring(tbl.CurrentValue or tbl.Default or "")
+            local cb = tbl.Callback or function() end
+            local flag = tbl.Flag or name
+            mk("TextLabel", { Size = UDim2.new(1, 0, 0, 16), BackgroundTransparency = 1, Text = name, Font = Enum.Font.Gotham, TextSize = 11, TextColor3 = TXT_DIM, TextXAlignment = Enum.TextXAlignment.Left }, parent)
+            local box = mk("TextBox", { Size = UDim2.new(1, 0, 0, 28), BackgroundColor3 = BG_INPUT, TextColor3 = TXT_MAIN, PlaceholderColor3 = TXT_DIM, PlaceholderText = tostring(tbl.PlaceholderText or tbl.Placeholder or ""), Text = cur, Font = Enum.Font.Gotham, TextSize = 12, ClearTextOnFocus = false }, parent)
+            applyCorner(box, 6)
+            applyStroke(box, STROKE_D, 0.5, 1)
+            mk("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10) }, box)
+            ZanjiUI.Flags[flag] = cur
+            trackSearch(box, name)
+            local h = { CurrentValue = cur, Value = cur }
+            box.FocusLost:Connect(function(enter)
+                h.CurrentValue = box.Text; h.Value = box.Text
+                ZanjiUI.Flags[flag] = box.Text
+                task.spawn(function() pcall(cb, box.Text) end)
+            end)
+            function h:Set(v)
+                box.Text = tostring(v or "")
+                h.CurrentValue = box.Text; h.Value = box.Text
+                ZanjiUI.Flags[flag] = box.Text
+            end
+            function h:OnChanged(fn)
+                box:GetPropertyChangedSignal("Text"):Connect(function() pcall(fn, box.Text) end)
+            end
+            return h
+        end
+
+        function Tab:CreateSlider(tbl, forceParent)
+            tbl = tbl or {}
+            local parent = typeof(forceParent) == "Instance" and forceParent or page
+            local name = tostring(tbl.Name or tbl.Title or "Slider")
+            local rng = tbl.Range or { 0, 100 }
+            local cur = tonumber(tbl.CurrentValue or tbl.Default or rng[1]) or rng[1]
+            local cb = tbl.Callback or function() end
+            local flag = tbl.Flag or name
+            mk("TextLabel", { Size = UDim2.new(1, 0, 0, 16), BackgroundTransparency = 1, Text = name .. " : " .. tostring(cur), Font = Enum.Font.Gotham, TextSize = 11, TextColor3 = TXT_DIM, TextXAlignment = Enum.TextXAlignment.Left }, parent)
+            local bar = mk("TextButton", { Size = UDim2.new(1, 0, 0, 22), BackgroundColor3 = BG_INPUT, Text = "", AutoButtonColor = false }, parent)
+            applyCorner(bar, 6)
+            local fill = mk("Frame", { Size = UDim2.new(0, 0, 1, 0), BackgroundColor3 = ACCENT, BorderSizePixel = 0 }, bar)
+            applyCorner(fill, 6)
+            trackSearch(bar, name)
+            local h = { CurrentValue = cur, Value = cur }
+            local function render()
+                local pct = math.clamp((h.CurrentValue - rng[1]) / math.max(1, (rng[2] - rng[1])), 0, 1)
+                fill.Size = UDim2.new(pct, 0, 1, 0)
+            end
+            render()
+            function h:Set(v)
+                h.CurrentValue = tonumber(v) or h.CurrentValue
+                h.Value = h.CurrentValue
+                ZanjiUI.Flags[flag] = h.CurrentValue
+                render()
+                task.spawn(function() pcall(cb, h.CurrentValue) end)
+            end
+            bar.MouseButton1Click:Connect(function()
+                -- simple step click (full drag omitted for brevity)
+                h:Set(math.clamp(h.CurrentValue + (tbl.Increment or 1), rng[1], rng[2]))
+            end)
+            return h
+        end
+
+        function Tab:CreateKeybind(tbl, forceParent)
+            tbl = tbl or {}
+            return Tab:CreateInput({
+                Name = tbl.Name or "Keybind",
+                CurrentValue = tostring(tbl.CurrentKeybind or tbl.Default or "H"),
+                Flag = tbl.Flag,
+                Callback = tbl.Callback,
+            }, forceParent)
+        end
+
+        function Tab:CreateColorPicker(tbl, forceParent)
+            tbl = tbl or {}
+            return Tab:CreateInput({
+                Name = tbl.Name or "Color",
+                CurrentValue = "255,255,255",
+                Flag = tbl.Flag,
+                Callback = tbl.Callback,
+            }, forceParent)
+        end
+
+        return Tab
+    end
+
+    function Window:Destroy()
+        pcall(function() gui:Destroy() end)
+    end
+
+    -- search filter
+    searchBox:GetPropertyChangedSignal("Text"):Connect(function()
+        local q = string.lower(searchBox.Text or "")
+        local active = Window._active
+        if not active then return end
+        if q == "" then
+            for _, e in ipairs(active._elements) do pcall(function() e.Frame.Visible = true end) end
+            return
+        end
+        for _, e in ipairs(active._elements) do
+            pcall(function()
+                e.Frame.Visible = string.find(e.Text, q, 1, true) ~= nil
+            end)
+        end
+    end)
+
+    -- loading splash
+    if opts.LoadingTitle or opts.LoadingSubtitle then
+        ZanjiUI:Notify({ Title = tostring(opts.LoadingTitle or winTitle), Content = tostring(opts.LoadingSubtitle or "Loaded"), Duration = 3 })
+    end
+
+    return Window
+end
+
+function ZanjiUI:LoadConfiguration()
+    -- stub for Rayfield compat
+end
+
+return ZanjiUI

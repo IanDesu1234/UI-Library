@@ -368,13 +368,13 @@ function ZanjiUI:CreateWindow(opts)
             local head = mk("TextButton", { Size = UDim2.new(1, 0, 0, 30), BackgroundTransparency = 1, Text = "" }, card)
             mk("TextLabel", {
                 Size = UDim2.new(1, -40, 1, 0), Position = UDim2.new(0, 12, 0, 0),
-                BackgroundTransparency = 1, Text = "◉  " .. title,
+                BackgroundTransparency = 1, Text = "●  " .. title,
                 Font = Enum.Font.GothamBold, TextSize = 13, TextColor3 = TXT_MAIN,
                 TextXAlignment = Enum.TextXAlignment.Left,
             }, head)
             local arrow = mk("TextLabel", {
                 Size = UDim2.new(0, 24, 1, 0), Position = UDim2.new(1, -28, 0, 0),
-                BackgroundTransparency = 1, Text = "▾", Font = Enum.Font.GothamBold,
+                BackgroundTransparency = 1, Text = "-", Font = Enum.Font.GothamBold,
                 TextSize = 14, TextColor3 = TXT_DIM,
             }, head)
             local body = mk("Frame", { Size = UDim2.new(1, 0, 0, 0), Position = UDim2.new(0, 0, 0, 30), BackgroundTransparency = 1, AutomaticSize = Enum.AutomaticSize.Y }, card)
@@ -384,7 +384,7 @@ function ZanjiUI:CreateWindow(opts)
             head.MouseButton1Click:Connect(function()
                 open = not open
                 body.Visible = open
-                arrow.Text = open and "▾" or "▸"
+                arrow.Text = open and "-" or "+"
             end)
             trackSearch(card, title)
             -- return handle with full element API so Sections act like mini-tabs
@@ -532,7 +532,7 @@ function ZanjiUI:CreateWindow(opts)
             applyCorner(box, 6)
             applyStroke(box, Color3.fromRGB(76, 76, 106), 0.4, 1)
             local disp = mk("TextLabel", { Size = UDim2.new(1, -32, 1, 0), Position = UDim2.new(0, 10, 0, 0), BackgroundTransparency = 1, Text = "---", Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = TXT_MAIN, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd }, box)
-            mk("TextLabel", { Size = UDim2.new(0, 20, 1, 0), Position = UDim2.new(1, -22, 0, 0), BackgroundTransparency = 1, Text = "▾", Font = Enum.Font.GothamBold, TextSize = 13, TextColor3 = TXT_DIM }, box)
+            mk("TextLabel", { Size = UDim2.new(0, 20, 1, 0), Position = UDim2.new(1, -22, 0, 0), BackgroundTransparency = 1, Text = "v", Font = Enum.Font.GothamBold, TextSize = 13, TextColor3 = TXT_DIM }, box)
             local list = mk("Frame", { Size = UDim2.new(1, 0, 0, 0), BackgroundColor3 = Color3.fromRGB(24, 24, 35), BorderSizePixel = 0, Visible = false, AutomaticSize = Enum.AutomaticSize.Y }, parent)
             applyCorner(list, 6)
             applyStroke(list, STROKE_D, 0.4, 1)

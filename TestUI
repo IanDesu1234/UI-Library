@@ -669,31 +669,103 @@ function ZanjiUI:CreateWindow(opts)
             local parent = typeof(forceParent) == "Instance" and forceParent or page
             local name = tostring(tbl.Name or tbl.Title or "Slider")
             local rng = tbl.Range or { 0, 100 }
-            local cur = tonumber(tbl.CurrentValue or tbl.Default or rng[1]) or rng[1]
+            local minV, maxV = tonumber(rng[1]) or 0, tonumber(rng[2]) or 100
+            local inc = tonumber(tbl.Increment) or tonumber(tbl.Step)
+            local cur = tonumber(tbl.CurrentValue or tbl.Default or minV) or minV
             local cb = tbl.Callback or function() end
             local flag = tbl.Flag or name
-            mk("TextLabel", { Size = UDim2.new(1, 0, 0, 16), BackgroundTransparency = 1, Text = name .. " : " .. tostring(cur), Font = Enum.Font.Gotham, TextSize = 11, TextColor3 = TXT_DIM, TextXAlignment = Enum.TextXAlignment.Left }, parent)
+            local function roundVal(v)
+                if inc and inc > 0 then
+                    v = math.floor(v / inc + 0.5) * inc
+                    -- fix float precision (e.g. 0.1 steps)
+                    local dec = 0
+                    local s = tostring(inc)
+                    local dot = string.find(s, "%.")
+                    if dot then dec = #s - dot end
+                    if dec > 0 then
+                        local mult = 10 ^ math.min(dec, 4)
+                        v = math.floor(v * mult + 0.5) / mult
+                    end
+                    return v
+                end
+                -- default: integers when range is integer-ish
+                return math.floor(v + 0.5)
+            end
+            cur = math.clamp(roundVal(cur), minV, maxV)
+            local title = mk("TextLabel", { Size = UDim2.new(1, 0, 0, 16), BackgroundTransparency = 1, Text = name .. " : " .. tostring(cur), Font = Enum.Font.Gotham, TextSize = 11, TextColor3 = TXT_DIM, TextXAlignment = Enum.TextXAlignment.Left }, parent)
             local bar = mk("TextButton", { Size = UDim2.new(1, 0, 0, 22), BackgroundColor3 = BG_INPUT, Text = "", AutoButtonColor = false }, parent)
-            applyCorner(bar, 6)
+            applyCorner(bar, 11)
+            applyStroke(bar, STROKE_D, 0.6, 1)
             local fill = mk("Frame", { Size = UDim2.new(0, 0, 1, 0), BackgroundColor3 = ACCENT, BorderSizePixel = 0 }, bar)
-            applyCorner(fill, 6)
+            applyCorner(fill, 11)
+            -- knob for affordance
+            local knob = mk("Frame", { Size = UDim2.fromOffset(12, 12), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0, 0, 0.5, 0), BackgroundColor3 = Color3.fromRGB(255, 255, 255), BorderSizePixel = 0, Visible = false }, bar)
+            applyCorner(knob, 6)
             trackSearch(bar, name)
             local h = { CurrentValue = cur, Value = cur }
+            ZanjiUI.Flags[flag] = cur
+            local dragging = false
             local function render()
-                local pct = math.clamp((h.CurrentValue - rng[1]) / math.max(1, (rng[2] - rng[1])), 0, 1)
+                local pct = 0
+                if maxV ~= minV then
+                    pct = math.clamp((h.CurrentValue - minV) / (maxV - minV), 0, 1)
+                end
                 fill.Size = UDim2.new(pct, 0, 1, 0)
+                pcall(function()
+                    knob.Position = UDim2.new(pct, 0, 0.5, 0)
+                end)
+                title.Text = name .. " : " .. tostring(h.CurrentValue)
             end
             render()
-            function h:Set(v)
-                h.CurrentValue = tonumber(v) or h.CurrentValue
-                h.Value = h.CurrentValue
-                ZanjiUI.Flags[flag] = h.CurrentValue
-                render()
-                task.spawn(function() pcall(cb, h.CurrentValue) end)
+            local function applyValue(v, fire)
+                v = math.clamp(roundVal(v), minV, maxV)
+                if v ~= h.CurrentValue then
+                    h.CurrentValue = v
+                    h.Value = v
+                    ZanjiUI.Flags[flag] = v
+                    render()
+                    if fire ~= false then
+                        task.spawn(function() pcall(cb, v) end)
+                    end
+                else
+                    render()
+                end
             end
-            bar.MouseButton1Click:Connect(function()
-                -- simple step click (full drag omitted for brevity)
-                h:Set(math.clamp(h.CurrentValue + (tbl.Increment or 1), rng[1], rng[2]))
+            function h:Set(v)
+                local n = tonumber(v)
+                if n then applyValue(n, true) end
+            end
+            function h:OnChanged(fn)
+                h._sliderHook = fn
+                -- wrap callback so external hook also fires smoothly
+                local origCb = cb
+                cb = function(v)
+                    pcall(origCb, v)
+                    pcall(fn, v)
+                end
+            end
+            local function setFromInput(xPos)
+                local ax, aw = bar.AbsolutePosition.X, math.max(1, bar.AbsoluteSize.X)
+                local pct = math.clamp((xPos - ax) / aw, 0, 1)
+                applyValue(minV + pct * (maxV - minV), true)
+            end
+            bar.InputBegan:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                    dragging = true
+                    knob.Visible = true
+                    setFromInput(input.Position.X)
+                end
+            end)
+            UserInputService.InputChanged:Connect(function(input)
+                if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+                    setFromInput(input.Position.X)
+                end
+            end)
+            UserInputService.InputEnded:Connect(function(input)
+                if dragging and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
+                    dragging = false
+                    knob.Visible = false
+                end
             end)
             return h
         end

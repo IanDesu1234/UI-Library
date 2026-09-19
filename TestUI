@@ -16,7 +16,7 @@
 -- ============================================================
 local ZanjiUI = {}
 ZanjiUI.Flags = {}
-ZanjiUI.Version = "1.0-zanji"
+ZanjiUI.Version = "1.1-inputrow"
 
 local Players = game:GetService("Players")
 local CoreGui = game:GetService("CoreGui")

@@ -362,31 +362,16 @@ function ZanjiUI:CreateWindow(opts)
 
         function Tab:CreateSection(title)
             title = tostring(title or "Section")
-            local card = mk("Frame", { Size = UDim2.new(1, 0, 0, 34), BackgroundColor3 = BG_CARD, BorderSizePixel = 0, AutomaticSize = Enum.AutomaticSize.Y }, page)
-            applyCorner(card, 6)
-            applyStroke(card, STROKE_P, 0.55, 1)
-            local head = mk("TextButton", { Size = UDim2.new(1, 0, 0, 30), BackgroundTransparency = 1, Text = "" }, card)
-            mk("TextLabel", {
-                Size = UDim2.new(1, -40, 1, 0), Position = UDim2.new(0, 12, 0, 0),
+            -- minimal header: plain title label, no card, no collapse toggle, no dead space
+            local label = mk("TextLabel", {
+                Size = UDim2.new(1, 0, 0, 22),
                 BackgroundTransparency = 1, Text = "●  " .. title,
                 Font = Enum.Font.GothamBold, TextSize = 13, TextColor3 = TXT_MAIN,
                 TextXAlignment = Enum.TextXAlignment.Left,
-            }, head)
-            local arrow = mk("TextLabel", {
-                Size = UDim2.new(0, 24, 1, 0), Position = UDim2.new(1, -28, 0, 0),
-                BackgroundTransparency = 1, Text = "-", Font = Enum.Font.GothamBold,
-                TextSize = 14, TextColor3 = TXT_DIM,
-            }, head)
-            local body = mk("Frame", { Size = UDim2.new(1, 0, 0, 0), Position = UDim2.new(0, 0, 0, 30), BackgroundTransparency = 1, AutomaticSize = Enum.AutomaticSize.Y }, card)
-            mk("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10), PaddingTop = UDim.new(0, 2), PaddingBottom = UDim.new(0, 10) }, body)
+            }, page)
+            local body = mk("Frame", { Size = UDim2.new(1, 0, 0, 0), BackgroundTransparency = 1, AutomaticSize = Enum.AutomaticSize.Y }, page)
             mk("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }, body)
-            local open = true
-            head.MouseButton1Click:Connect(function()
-                open = not open
-                body.Visible = open
-                arrow.Text = open and "-" or "+"
-            end)
-            trackSearch(card, title)
+            trackSearch(label, title)
             -- return handle with full element API so Sections act like mini-tabs
             local Sec = {}
             local function addToBody(f) f.Parent = body; return f end

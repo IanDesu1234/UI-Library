@@ -625,13 +625,15 @@ function ZanjiUI:CreateWindow(opts)
             local cur = tostring(tbl.CurrentValue or tbl.Default or "")
             local cb = tbl.Callback or function() end
             local flag = tbl.Flag or name
-            mk("TextLabel", { Size = UDim2.new(1, 0, 0, 16), BackgroundTransparency = 1, Text = name, Font = Enum.Font.Gotham, TextSize = 11, TextColor3 = TXT_DIM, TextXAlignment = Enum.TextXAlignment.Left }, parent)
-            local box = mk("TextBox", { Size = UDim2.new(1, 0, 0, 28), BackgroundColor3 = BG_INPUT, TextColor3 = TXT_MAIN, PlaceholderColor3 = TXT_DIM, PlaceholderText = tostring(tbl.PlaceholderText or tbl.Placeholder or ""), Text = cur, Font = Enum.Font.Gotham, TextSize = 12, ClearTextOnFocus = false }, parent)
+            -- compact single row: label left, box right (was stacked full-width)
+            local row = mk("Frame", { Size = UDim2.new(1, 0, 0, 28), BackgroundTransparency = 1 }, parent)
+            mk("TextLabel", { Size = UDim2.new(0.42, 0, 1, 0), BackgroundTransparency = 1, Text = name, Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = TXT_MAIN, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd }, row)
+            local box = mk("TextBox", { Size = UDim2.new(0.58, 0, 0, 26), Position = UDim2.new(0.42, 0, 0.5, -13), BackgroundColor3 = BG_INPUT, TextColor3 = TXT_MAIN, PlaceholderColor3 = TXT_DIM, PlaceholderText = tostring(tbl.PlaceholderText or tbl.Placeholder or ""), Text = cur, Font = Enum.Font.Gotham, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, ClearTextOnFocus = false }, row)
             applyCorner(box, 6)
             applyStroke(box, STROKE_D, 0.5, 1)
             mk("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10) }, box)
             ZanjiUI.Flags[flag] = cur
-            trackSearch(box, name)
+            trackSearch(row, name)
             local h = { CurrentValue = cur, Value = cur }
             box.FocusLost:Connect(function(enter)
                 h.CurrentValue = box.Text; h.Value = box.Text

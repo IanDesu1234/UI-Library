@@ -16,7 +16,7 @@
 -- ============================================================
 local ZanjiUI = {}
 ZanjiUI.Flags = {}
-ZanjiUI.Version = "1.5-input160"
+ZanjiUI.Version = "1.6-scroll"
 
 local Players = game:GetService("Players")
 local CoreGui = game:GetService("CoreGui")
@@ -166,7 +166,7 @@ function ZanjiUI:CreateWindow(opts)
         Size = UDim2.fromOffset(760, 480),
         BackgroundColor3 = BG_MAIN,
         BorderSizePixel = 0,
-        Active = true,
+        Active = false,
     }, gui)
     applyCorner(main, 8)
     applyStroke(main, Color3.fromRGB(42, 42, 58), 0.2, 1)
@@ -214,6 +214,7 @@ function ZanjiUI:CreateWindow(opts)
         Size = UDim2.new(1, -150, 0, 56),
         Position = UDim2.new(0, 150, 0, 0),
         BackgroundTransparency = 1,
+        Active = true,
     }, main)
     local titleLbl = mk("TextLabel", {
         Name = "Title",
@@ -342,7 +343,9 @@ function ZanjiUI:CreateWindow(opts)
             Position = UDim2.new(0, 160, 0, 60),
             BackgroundTransparency = 1,
             BorderSizePixel = 0,
-            ScrollBarThickness = 3,
+            Active = true,
+            ScrollingEnabled = true,
+            ScrollBarThickness = 6,
             ScrollBarImageColor3 = ACCENT,
             CanvasSize = UDim2.new(0, 0, 0, 0),
             AutomaticCanvasSize = Enum.AutomaticSize.Y,
@@ -362,15 +365,19 @@ function ZanjiUI:CreateWindow(opts)
 
         function Tab:CreateSection(title)
             title = tostring(title or "Section")
-            -- minimal header: plain title label, no card, no collapse toggle, no dead space
-            local label = mk("TextLabel", {
+            -- minimal header: title acts as collapse toggle (tap to fold long groups)
+            local label = mk("TextButton", {
                 Size = UDim2.new(1, 0, 0, 22),
                 BackgroundTransparency = 1, Text = "●  " .. title,
                 Font = Enum.Font.GothamBold, TextSize = 13, TextColor3 = TXT_MAIN,
                 TextXAlignment = Enum.TextXAlignment.Left,
+                AutoButtonColor = false,
             }, page)
             local body = mk("Frame", { Size = UDim2.new(1, 0, 0, 0), BackgroundTransparency = 1, AutomaticSize = Enum.AutomaticSize.Y }, page)
             mk("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }, body)
+            label.MouseButton1Click:Connect(function()
+                body.Visible = not body.Visible
+            end)
             trackSearch(label, title)
             -- return handle with full element API so Sections act like mini-tabs
             local Sec = {}

@@ -16,7 +16,7 @@
 -- ============================================================
 local ZanjiUI = {}
 ZanjiUI.Flags = {}
-ZanjiUI.Version = "1.4-inputnarrow"
+ZanjiUI.Version = "1.5-input160"
 
 local Players = game:GetService("Players")
 local CoreGui = game:GetService("CoreGui")
@@ -627,8 +627,8 @@ function ZanjiUI:CreateWindow(opts)
             local flag = tbl.Flag or name
             -- compact single row: label left, box right (was stacked full-width)
             local row = mk("Frame", { Size = UDim2.new(1, 0, 0, 28), BackgroundTransparency = 1 }, parent)
-            mk("TextLabel", { Size = UDim2.new(1, -240, 1, 0), BackgroundTransparency = 1, Text = name, Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = TXT_MAIN, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd }, row)
-            local box = mk("TextBox", { AnchorPoint = Vector2.new(1, 0.5), Size = UDim2.new(0, 220, 0, 26), Position = UDim2.new(1, 0, 0.5, 0), BackgroundColor3 = BG_INPUT, TextColor3 = TXT_MAIN, PlaceholderColor3 = TXT_DIM, PlaceholderText = tostring(tbl.PlaceholderText or tbl.Placeholder or ""), Text = cur, Font = Enum.Font.Gotham, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, ClearTextOnFocus = false }, row)
+            mk("TextLabel", { Size = UDim2.new(1, -180, 1, 0), BackgroundTransparency = 1, Text = name, Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = TXT_MAIN, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd }, row)
+            local box = mk("TextBox", { AnchorPoint = Vector2.new(1, 0.5), Size = UDim2.new(0, 160, 0, 26), Position = UDim2.new(1, 0, 0.5, 0), BackgroundColor3 = BG_INPUT, TextColor3 = TXT_MAIN, PlaceholderColor3 = TXT_DIM, PlaceholderText = tostring(tbl.PlaceholderText or tbl.Placeholder or ""), Text = cur, Font = Enum.Font.Gotham, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, ClearTextOnFocus = false }, row)
             applyCorner(box, 6)
             applyStroke(box, STROKE_D, 0.5, 1)
             mk("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10) }, box)
